@@ -23,30 +23,7 @@ class Stats
         $key = 'throttle.rrd.today'.$metric;
         $data = \apcu_fetch($key);
         if ($data === false) {
-            $historical = self::getRawRrdData('-24hours', 300, $metric);
-            $historical = array_reduce($historical, function ($r, $d) {
-                return $r + $d[1];
-            }, 0);
-
-/*
-            $lukey = 'throttle.rrd.submitted.submitted.lastupdate';
-            $last = \apcu_fetch($lukey);
-            if ($last === false) {
-                list($last,) = \execx('/usr/bin/rrdtool lastupdate %s', '/var/lib/munin/fennec/fennec-throttle_submitted-submitted-d.rrd');
-                $last = \phutil_split_lines($last);
-                $last = array_pop($last);
-                $last = explode(':', $last, 2);
-                $last = trim(array_pop($last));
-                \apcu_add($lukey, $last, 300);
-            }
-
-            $live = $app['redis']->hGet('throttle:stats', 'crashes:submitted');
-
-            $data = round($historical + ($live - $last));
-            \apcu_add($key, $data, 10);
-*/
-
-            $data = round($historical);
+            $data = $app['db']->executeQuery('SELECT COUNT(*) FROM crash WHERE timestamp > DATE_SUB(NOW(), INTERVAL 24 HOUR)')->fetchColumn(0);
             \apcu_add($key, $data, 300);
         }
 
@@ -62,6 +39,9 @@ class Stats
         $data = \apcu_fetch($key);
         if ($data === false) {
             $data = $app['redis']->hGet('throttle:stats', 'crashes:submitted');
+            if ($data === false || $data === null) {
+                $data = $app['db']->executeQuery('SELECT COUNT(*) FROM crash')->fetchColumn(0);
+            }
 
             \apcu_add($key, $data, 10);
         }
@@ -89,17 +69,61 @@ class Stats
         ));
     }
 
-    public function daily(Application $app, $module = null, $function = null)
+    public function processing(Application $app)
     {
-        if ($module === null && $function === null) {
-            $output = self::getCsvRrdData('-90days', 86400, self::METRIC_GRAPH);
+        $key = 'throttle.processing.csv';
+        $output = \apcu_fetch($key);
+        if ($output !== false) {
             return new \Symfony\Component\HttpFoundation\Response($output, 200, array(
                 'Content-Type' => 'text/csv',
                 'Access-Control-Allow-Origin' => '*',
             ));
         }
 
-        $query = null;
+        $rows = $app['redis']->lRange('throttle:stats:processing', 0, -1);
+        $data = array();
+        foreach ($rows as $row) {
+            list($timestamp, $duration) = array_pad(explode(':', $row, 2), 2, null);
+            if ($timestamp === null || $duration === null || !ctype_digit($timestamp)) {
+                continue;
+            }
+
+            if ((int)$timestamp < strtotime('-7 days')) {
+                continue;
+            }
+
+            $bucket = gmdate('Y-m-d-H', (int)$timestamp);
+            if (!isset($data[$bucket])) {
+                $data[$bucket] = array('total' => 0, 'count' => 0);
+            }
+
+            $data[$bucket]['total'] += (float)$duration;
+            $data[$bucket]['count'] += 1;
+        }
+
+        $output = 'Date,Average Processing Seconds'.PHP_EOL;
+        for ($i = 167; $i >= 0; $i--) {
+            $bucket = gmdate('Y-m-d-H', strtotime('-'.$i.' hours'));
+            $average = 0;
+            if (isset($data[$bucket]) && $data[$bucket]['count'] > 0) {
+                $average = round($data[$bucket]['total'] / $data[$bucket]['count'], 3);
+            }
+            $output .= $bucket.','.$average.PHP_EOL;
+        }
+
+        \apcu_add($key, $output, 60);
+
+        return new \Symfony\Component\HttpFoundation\Response($output, 200, array(
+            'Content-Type' => 'text/csv',
+            'Access-Control-Allow-Origin' => '*',
+        ));
+    }
+
+    public function daily(Application $app, $module = null, $function = null)
+    {
+        if ($module === null && $function === null) {
+            $query = $app['db']->executeQuery('SELECT DATE(timestamp) AS date, COUNT(*) AS count FROM crash WHERE timestamp > DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP BY DATE(timestamp)');
+        }
 
         if ($function !== null) {
             if (preg_match('/^0x[0-9a-f]+$/', $function)) {
@@ -138,14 +162,8 @@ class Stats
     public function hourly(Application $app, $module = null, $function = null)
     {
         if ($module === null && $function === null) {
-            $output = self::getCsvRrdData('-7days', 3600, self::METRIC_GRAPH);
-            return new \Symfony\Component\HttpFoundation\Response($output, 200, array(
-                'Content-Type' => 'text/csv',
-                'Access-Control-Allow-Origin' => '*',
-            ));
+            $query = $app['db']->executeQuery('SELECT DATE(timestamp) AS date, HOUR(timestamp) AS hour, COUNT(*) AS count FROM crash WHERE timestamp > DATE_SUB(NOW(), INTERVAL 168 HOUR) GROUP BY DATE(timestamp), HOUR(timestamp)');
         }
-
-        $query = null;
 
         if ($function !== null) {
             if (preg_match('/^0x[0-9a-f]+$/', $function)) {
@@ -345,4 +363,3 @@ class Stats
         return $data;
     }
 }
-

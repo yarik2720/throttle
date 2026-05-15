@@ -393,6 +393,7 @@ class CrashProcessCommand extends Command
 
             $duration = microtime(true) - $start;
             $app['redis']->rPush('throttle:stats:processing', time().':'.$duration);
+            $app['redis']->lTrim('throttle:stats:processing', -10000, -1);
 
             $progress->advance();
         }
@@ -411,4 +412,3 @@ class CrashProcessCommand extends Command
         $lock->unlock();
     }
 }
-

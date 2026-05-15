@@ -16,11 +16,11 @@
             "type": "package",
             "package": {
                 "name": "phacility/libphutil",
-                "version": "dev-stable",
+                "version": "dev-legacy-2019",
                 "source": {
                     "url": "https://github.com/phacility/libphutil.git",
                     "type": "git",
-                    "reference": "origin/stable"
+                    "reference": "legacy-2019"
                 }
             }
         }
@@ -39,7 +39,7 @@
         "silex/web-profiler": "1.0.2",
         "symfony/web-profiler-bundle": "~2.3.0",
         "symfony/debug": "~2.3.0",
-        "phacility/libphutil": "dev-stable",
+        "phacility/libphutil": "dev-legacy-2019",
         "lightopenid/lightopenid": "dev-master",
         "pda/pheanstalk": "^3.1",
         "sorien/silex-dbal-profiler": "~1.1"

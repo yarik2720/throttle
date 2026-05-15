@@ -325,6 +325,9 @@ $app->get('/stats/lifetime', 'Throttle\Stats::lifetime')
 $app->get('/stats/unique', 'Throttle\Stats::unique')
     ->bind('stats_unique');
 
+$app->get('/stats/processing', 'Throttle\Stats::processing')
+    ->bind('stats_processing');
+
 $app->get('/stats/daily/{module}/{function}', 'Throttle\Stats::daily')
     ->value('module', null)
     ->value('function', null)
@@ -442,4 +445,3 @@ $app->get('/', 'Throttle\Home::index')
     ->bind('index');
 
 $app->run();
-

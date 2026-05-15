@@ -6,6 +6,7 @@ function bindLiveCounter(counter, url, interval) {
 
   function animateCounter() {
     if (current === target) {
+        counter.text(Number(target).toLocaleString());
         animating = false;
         return;
     }

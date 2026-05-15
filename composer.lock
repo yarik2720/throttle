@@ -835,11 +835,11 @@
         },
         {
             "name": "phacility/libphutil",
-            "version": "dev-stable",
+            "version": "dev-legacy-2019",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phacility/libphutil.git",
-                "reference": "origin/stable"
+                "reference": "034cf7cc39940b935e83923dbb1bacbcfe645a85"
             },
             "type": "library",
             "time": "2019-05-16T20:57:37+00:00"
