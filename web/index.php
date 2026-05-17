@@ -296,6 +296,12 @@ $app->get('/logout', 'Throttle\Home::logout')
 $app->post('/symbols/submit', 'Throttle\Symbols::submit')
     ->value('_format', 'txt');
 
+$app->post('/binary/submit', function() {
+    return new \Symfony\Component\HttpFoundation\Response('Not implemented', 200, array(
+        'Content-Type' => 'text/plain',
+    ));
+})->value('_format', 'txt');
+
 $app->post('/submit', 'Throttle\Crash::submit')
     ->value('_format', 'txt');
 
