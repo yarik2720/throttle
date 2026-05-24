@@ -80,11 +80,16 @@
 {% if not module %}
 <h2>Processing Performance</h2>
 <div class="well well-sm">
-  <div id="chart_processing" style="width:100%; height:200px;">
-    <div class="text-center" style="line-height: 200px;">
-      <i class="icon-cog icon-3x icon-spin"></i>
-    </div>
-  </div>
+  <h4>Crashes Submitted / Minute</h4>
+  <div id="chart_processing_submitted" style="width:100%; height:160px;"><div class="text-center" style="line-height: 160px;"><i class="icon-cog icon-3x icon-spin"></i></div></div>
+  <h4>Crashes Processed / Minute</h4>
+  <div id="chart_processing_processed" style="width:100%; height:160px;"><div class="text-center" style="line-height: 160px;"><i class="icon-cog icon-3x icon-spin"></i></div></div>
+  <h4>Crashes Cleaned / Minute</h4>
+  <div id="chart_processing_cleaned" style="width:100%; height:160px;"><div class="text-center" style="line-height: 160px;"><i class="icon-cog icon-3x icon-spin"></i></div></div>
+  <h4>Symbol Lookups %</h4>
+  <div id="chart_processing_lookups" style="width:100%; height:160px;"><div class="text-center" style="line-height: 160px;"><i class="icon-cog icon-3x icon-spin"></i></div></div>
+  <h4>Symbol Coverage %</h4>
+  <div id="chart_processing_coverage" style="width:100%; height:160px;"><div class="text-center" style="line-height: 160px;"><i class="icon-cog icon-3x icon-spin"></i></div></div>
 </div>
 {% endif %}
 {% endblock %}
@@ -155,9 +160,9 @@ $(function() {
       data: {
         csv: csv,
         parseDate: function(s) {
-          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})-([0-9]{1,2})$/);
+          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})$/);
           if (match) {
-            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4], +match[5]);
+            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4]);
           }
         },
       },
@@ -185,83 +190,82 @@ $(function() {
 
 {% if not module %}
   $.get('{{ path('stats_processing') }}', function(csv) {
-    $('#chart_processing').highcharts({
-      chart: {
-        type: 'line',
-      },
-      data: {
-        csv: csv,
-        parseDate: function(s) {
-          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})-([0-9]{1,2})$/);
-          if (match) {
-            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4], +match[5]);
-          }
+    var rows = csv.replace(/\s+$/, '').split(/\r?\n/);
+    rows.shift();
+
+    var series = {
+      submitted: [],
+      processed: [],
+      cleaned: [],
+      lookups: [],
+      coverage: [],
+    };
+
+    function parseProcessingDate(s) {
+      var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})-([0-9]{1,2})$/);
+      if (!match) return null;
+      return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4], +match[5]);
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i].split(',');
+      var date = parseProcessingDate(row[0]);
+      if (date === null) continue;
+
+      series.submitted.push([date, +(row[1] || 0)]);
+      series.processed.push([date, +(row[2] || 0)]);
+      series.cleaned.push([date, +(row[3] || 0)]);
+      series.lookups.push([date, +(row[4] || 0)]);
+      series.coverage.push([date, +(row[5] || 0)]);
+    }
+
+    function processingChart(id, name, data, suffix, max) {
+      $('#' + id).highcharts({
+        chart: {
+          type: 'line',
         },
-      },
-      title: {
-        text: '',
-      },
-      xAxis: {
-        type: 'datetime',
-      },
-      tooltip: {
-        shared: true,
-      },
-      plotOptions: {
-        series: {
-          marker: {
-            enabled: false,
+        title: {
+          text: '',
+        },
+        xAxis: {
+          type: 'datetime',
+        },
+        yAxis: {
+          title: {
+            text: '',
+          },
+          min: 0,
+          max: max,
+          allowDecimals: true,
+        },
+        tooltip: {
+          valueSuffix: suffix || '',
+        },
+        plotOptions: {
+          series: {
+            marker: {
+              enabled: false,
+            },
           },
         },
-      },
-      series: [{
-        name: 'Crashes Submitted / Minute',
-        type: 'line',
-        yAxis: 0,
-      }, {
-        name: 'Crashes Processed / Minute',
-        type: 'line',
-        yAxis: 0,
-      }, {
-        name: 'Crashes Cleaned / Minute',
-        type: 'line',
-        yAxis: 0,
-      }, {
-        name: 'Symbol Lookups %',
-        type: 'line',
-        yAxis: 1,
-        tooltip: {
-          valueSuffix: '%',
+        series: [{
+          name: name,
+          data: data,
+        }],
+        legend: {
+          enabled: false,
         },
-      }, {
-        name: 'Symbol Coverage %',
-        type: 'line',
-        yAxis: 1,
-        tooltip: {
-          valueSuffix: '%',
+        credits: {
+          enabled: false,
         },
-      }],
-      yAxis: [{
-        title: {
-          text: 'Count / Minute',
-        },
-        allowDecimals: true,
-        min: 0,
-      }, {
-        title: {
-          text: 'Percent',
-        },
-        min: 0,
-        max: 100,
-        opposite: true,
-      }],
-      legend: {
-        enabled: true,
-      },
-      credits: {
-        enabled: false,
-      },
-    });
+      });
+    }
+
+    processingChart('chart_processing_submitted', 'Crashes Submitted / Minute', series.submitted);
+    processingChart('chart_processing_processed', 'Crashes Processed / Minute', series.processed);
+    processingChart('chart_processing_cleaned', 'Crashes Cleaned / Minute', series.cleaned);
+    processingChart('chart_processing_lookups', 'Symbol Lookups %', series.lookups, '%', 100);
+    processingChart('chart_processing_coverage', 'Symbol Coverage %', series.coverage, '%', 100);
   });
 {% endif %}
 
