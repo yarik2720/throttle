@@ -2,6 +2,7 @@
 
 namespace Throttle\Command;
 
+use Throttle\MinuteStats;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
@@ -27,6 +28,7 @@ class CrashCleanCommand extends Command
         $app = $this->getApplication()->getContainer();
 
         $total_count = 0;
+        $cleaned_count = 0;
 
         $groups = $app['db']->executeQuery('SELECT owner, ip, INET6_NTOA(ip) AS display_ip FROM crash WHERE lastview IS NULL OR lastview < DATE_SUB(NOW(), INTERVAL 90 DAY) GROUP BY owner, ip HAVING (owner IS NULL AND COUNT(*) > 50) OR (owner IS NOT NULL AND COUNT(*) > 100)');
 
@@ -48,6 +50,7 @@ class CrashCleanCommand extends Command
 
                 if ($count > 0) {
                     $app['redis']->hIncrBy('throttle:stats', 'crashes:cleaned:limit', $count);
+                    $cleaned_count += $count;
                 }
             }
 
@@ -65,6 +68,7 @@ class CrashCleanCommand extends Command
 
             if ($count > 0) {
                 $app['redis']->hIncrBy('throttle:stats', 'crashes:cleaned:old', $count);
+                $cleaned_count += $count;
             }
         }
 
@@ -119,6 +123,7 @@ class CrashCleanCommand extends Command
 
         if ($count > 0 && !$input->getOption('dry-run')) {
             $app['redis']->hIncrBy('throttle:stats', 'crashes:cleaned:orphan', $count);
+            $cleaned_count += $count;
         }
 
         $output->writeln('Deleted ' . $count . ' orphaned minidumps.');
@@ -139,6 +144,7 @@ class CrashCleanCommand extends Command
 
                 if ($count > 0) {
                     $app['redis']->hIncrBy('throttle:stats', 'crashes:cleaned:missing', $count);
+                    $cleaned_count += $count;
                 }
             }
 
@@ -152,6 +158,9 @@ class CrashCleanCommand extends Command
                 print_r($anomalous);
             }
         }
+
+        if (!$input->getOption('dry-run') && $cleaned_count > 0) {
+            MinuteStats::increment($app['redis'], 'crashes:cleaned', $cleaned_count);
+        }
     }
 }
-

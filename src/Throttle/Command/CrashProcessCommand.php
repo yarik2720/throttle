@@ -2,6 +2,7 @@
 
 namespace Throttle\Command;
 
+use Throttle\MinuteStats;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Input\InputArgument;
@@ -144,8 +145,11 @@ class CrashProcessCommand extends Command
                         if (array_key_exists($cacheKey, $symbolCache)) {
                             if ($symbolCache[$cacheKey]) {
                                 $app['redis']->hIncrBy('throttle:stats', 'symbols:found-cached', 1);
+                                MinuteStats::increment($app['redis'], 'symbols:lookups', 1);
+                                MinuteStats::increment($app['redis'], 'symbols:lookups:found', 1);
                             } else {
                                 $app['redis']->hIncrBy('throttle:stats', 'symbols:missing-cached', 1);
+                                MinuteStats::increment($app['redis'], 'symbols:lookups', 1);
                             }
 
                             continue;
@@ -187,8 +191,11 @@ class CrashProcessCommand extends Command
 
                         if ($foundSymbolFile) {
                             $app['redis']->hIncrBy('throttle:stats', 'symbols:found-compressed', 1);
+                            MinuteStats::increment($app['redis'], 'symbols:lookups', 1);
+                            MinuteStats::increment($app['redis'], 'symbols:lookups:found', 1);
                         } else {
                             $app['redis']->hIncrBy('throttle:stats', 'symbols:missing', 1);
+                            MinuteStats::increment($app['redis'], 'symbols:lookups', 1);
                         }
                     }
 
@@ -224,8 +231,11 @@ class CrashProcessCommand extends Command
 
                                 $base = hexdec(substr($data[5], -8));
                                 $app['db']->executeUpdate('INSERT INTO module (crash, name, identifier, processed, present, base) VALUES (?, ?, ?, ?, ?, ?)', array($id, $data[3], $data[4], (int)$hasSymbols, (int)$hasSymbols, $base));
+                                MinuteStats::increment($app['redis'], 'symbols:coverage:modules', 1);
 
                                 if ($hasSymbols) {
+                                    MinuteStats::increment($app['redis'], 'symbols:coverage:present', 1);
+
                                     if (!array_key_exists($cacheKey, $repoCache)) {
                                         $sympath = $symbolCacheDirectory . '/' . $data[3] . '/' . $data[4] . '/' . $symname . '.sym';
                                         $symbols = fopen($sympath, 'r');
@@ -373,6 +383,7 @@ class CrashProcessCommand extends Command
                 $app['db']->executeUpdate('UPDATE crash SET stackhash = (SELECT GROUP_CONCAT(SUBSTRING(SHA2(rendered, 256), 1, 8) ORDER BY frame ASC SEPARATOR \'\') AS hash FROM frame WHERE crash = ? AND thread = ? AND frame < 10 AND module != \'\' GROUP BY crash, thread) WHERE id = ?', array($id, $crashThread, $id));
 
                 $app['redis']->hIncrBy('throttle:stats', 'crashes:processed', 1);
+                MinuteStats::increment($app['redis'], 'crashes:processed');
 
                 // This isn't as important, so do it after we mark the crash as processed.
                 // TODO: We're in a transaction... the above comment makes no sense.

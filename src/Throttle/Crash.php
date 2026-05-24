@@ -156,6 +156,7 @@ class Crash
         }
 
         $app['redis']->hIncrBy('throttle:stats', 'crashes:submitted', 1);
+        MinuteStats::increment($app['redis'], 'crashes:submitted');
 
         $minidump = $app['request']->files->get('upload_file_minidump');
 
@@ -817,4 +818,3 @@ class Crash
         ));
     }
 }
-

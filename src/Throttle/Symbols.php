@@ -16,10 +16,12 @@ class Symbols
         $app['redis']->hIncrBy('throttle:stats', 'symbols:submitted', 1);
         $app['redis']->hIncrBy('throttle:stats', 'symbols:submitted:bytes', strlen($data));
 
-        $lines = phutil_split_lines($data, false);
+        $firstLineEnd = strpos($data, "\n");
+        $firstLine = $firstLineEnd === false ? $data : substr($data, 0, $firstLineEnd);
+        $firstLine = rtrim($firstLine, "\r\n");
 
-        if (!preg_match('/^MODULE (?P<operatingsystem>[^ ]++) (?P<architecture>[^ ]++) (?P<id>[a-fA-F0-9]++) (?P<name>[^\\/\\\\\r\n]++)$/m', $lines[0], $info)) {
-            $app['monolog']->warning('Invalid symbol file: ' . $lines[0]);
+        if (!preg_match('/^MODULE (?P<operatingsystem>[^ ]++) (?P<architecture>[^ ]++) (?P<id>[a-fA-F0-9]++) (?P<name>[^\\/\\\\\r\n]++)$/', $firstLine, $info)) {
+            $app['monolog']->warning('Invalid symbol file: ' . $firstLine);
             $app['redis']->hIncrBy('throttle:stats', 'symbols:rejected:invalid', 1);
 
             return new \Symfony\Component\HttpFoundation\Response('Invalid symbol file', 400);
@@ -27,17 +29,25 @@ class Symbols
 
         if ($info['operatingsystem'] === 'Linux') {
             $functions = 0;
+            $offset = 0;
+            $length = strlen($data);
 
-            foreach ($lines as $line) {
-                list($type) = explode(' ', $line, 2);
+            while ($offset < $length) {
+                $lineEnd = strpos($data, "\n", $offset);
+                if ($lineEnd === false) {
+                    $lineEnd = $length;
+                }
+                $lineLength = $lineEnd - $offset;
 
-                if ($type === 'STACK') {
+                if ($lineLength >= 5 && substr_compare($data, 'STACK', $offset, 5) === 0 && ($lineLength === 5 || $data[$offset + 5] === ' ' || $data[$offset + 5] === "\r")) {
                     break;
                 }
 
-                if ($type === 'FUNC') {
+                if ($lineLength >= 5 && substr_compare($data, 'FUNC ', $offset, 5) === 0) {
                     $functions++;
                 }
+
+                $offset = $lineEnd + 1;
             }
 
             if ($functions === 0) {
@@ -55,7 +65,14 @@ class Symbols
             $file = substr($file, 0, -4);
         }
 
-        \Filesystem::writeFile($path . '/' . $file . '.sym.gz', gzencode($data));
+        $symbolPath = $path . '/' . $file . '.sym.gz';
+        $symbolFile = gzopen($symbolPath, 'wb9');
+        if ($symbolFile === false) {
+            throw new \RuntimeException('Failed to open symbol file for writing: ' . $symbolPath);
+        }
+
+        gzwrite($symbolFile, $data);
+        gzclose($symbolFile);
 
         $app['redis']->hIncrBy('throttle:stats', 'symbols:accepted', 1);
 
@@ -64,4 +81,3 @@ class Symbols
         ));
     }
 }
-

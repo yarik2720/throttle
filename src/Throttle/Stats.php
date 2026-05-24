@@ -80,35 +80,41 @@ class Stats
             ));
         }
 
-        $rows = $app['redis']->lRange('throttle:stats:processing', 0, -1);
+        $metrics = array(
+            'crashes:submitted',
+            'crashes:processed',
+            'crashes:cleaned',
+            'symbols:lookups',
+            'symbols:lookups:found',
+            'symbols:coverage:modules',
+            'symbols:coverage:present',
+        );
+
+        MinuteStats::cleanup($app['redis'], $metrics);
+
         $data = array();
-        foreach ($rows as $row) {
-            list($timestamp, $duration) = array_pad(explode(':', $row, 2), 2, null);
-            if ($timestamp === null || $duration === null || !ctype_digit($timestamp)) {
-                continue;
-            }
-
-            if ((int)$timestamp < strtotime('-7 days')) {
-                continue;
-            }
-
-            $bucket = gmdate('Y-m-d-H', (int)$timestamp);
-            if (!isset($data[$bucket])) {
-                $data[$bucket] = array('total' => 0, 'count' => 0);
-            }
-
-            $data[$bucket]['total'] += (float)$duration;
-            $data[$bucket]['count'] += 1;
+        foreach ($metrics as $metric) {
+            $data[$metric] = $app['redis']->hGetAll(MinuteStats::PREFIX . $metric);
         }
 
-        $output = 'Date,Average Processing Seconds'.PHP_EOL;
-        for ($i = 167; $i >= 0; $i--) {
-            $bucket = gmdate('Y-m-d-H', strtotime('-'.$i.' hours'));
-            $average = 0;
-            if (isset($data[$bucket]) && $data[$bucket]['count'] > 0) {
-                $average = round($data[$bucket]['total'] / $data[$bucket]['count'], 3);
-            }
-            $output .= $bucket.','.$average.PHP_EOL;
+        $output = 'Date,Crashes Submitted / Minute,Crashes Processed / Minute,Crashes Cleaned / Minute,Symbol Lookups %,Symbol Coverage %'.PHP_EOL;
+        $start = floor((time() - 24 * 3600) / 60) * 60;
+        $end = floor(time() / 60) * 60;
+
+        for ($timestamp = $start; $timestamp <= $end; $timestamp += 60) {
+            $bucket = (string)$timestamp;
+            $lookups = isset($data['symbols:lookups'][$bucket]) ? (int)$data['symbols:lookups'][$bucket] : 0;
+            $lookupsFound = isset($data['symbols:lookups:found'][$bucket]) ? (int)$data['symbols:lookups:found'][$bucket] : 0;
+            $modules = isset($data['symbols:coverage:modules'][$bucket]) ? (int)$data['symbols:coverage:modules'][$bucket] : 0;
+            $modulesPresent = isset($data['symbols:coverage:present'][$bucket]) ? (int)$data['symbols:coverage:present'][$bucket] : 0;
+
+            $output .= gmdate('Y-m-d-H-i', $timestamp);
+            $output .= ','.(isset($data['crashes:submitted'][$bucket]) ? (int)$data['crashes:submitted'][$bucket] : 0);
+            $output .= ','.(isset($data['crashes:processed'][$bucket]) ? (int)$data['crashes:processed'][$bucket] : 0);
+            $output .= ','.(isset($data['crashes:cleaned'][$bucket]) ? (int)$data['crashes:cleaned'][$bucket] : 0);
+            $output .= ','.($lookups > 0 ? round(($lookupsFound / $lookups) * 100, 2) : 0);
+            $output .= ','.($modules > 0 ? round(($modulesPresent / $modules) * 100, 2) : 0);
+            $output .= PHP_EOL;
         }
 
         \apcu_add($key, $output, 60);

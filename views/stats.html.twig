@@ -155,9 +155,9 @@ $(function() {
       data: {
         csv: csv,
         parseDate: function(s) {
-          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})$/);
+          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})-([0-9]{1,2})$/);
           if (match) {
-            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4]);
+            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4], +match[5]);
           }
         },
       },
@@ -192,9 +192,9 @@ $(function() {
       data: {
         csv: csv,
         parseDate: function(s) {
-          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})$/);
+          var match = s.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{1,2})-([0-9]{1,2})$/);
           if (match) {
-            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4]);
+            return Date.UTC(+match[1], match[2] - 1, +match[3], +match[4], +match[5]);
           }
         },
       },
@@ -204,15 +204,59 @@ $(function() {
       xAxis: {
         type: 'datetime',
       },
-      yAxis: {
+      tooltip: {
+        shared: true,
+      },
+      plotOptions: {
+        series: {
+          marker: {
+            enabled: false,
+          },
+        },
+      },
+      series: [{
+        name: 'Crashes Submitted / Minute',
+        type: 'line',
+        yAxis: 0,
+      }, {
+        name: 'Crashes Processed / Minute',
+        type: 'line',
+        yAxis: 0,
+      }, {
+        name: 'Crashes Cleaned / Minute',
+        type: 'line',
+        yAxis: 0,
+      }, {
+        name: 'Symbol Lookups %',
+        type: 'line',
+        yAxis: 1,
+        tooltip: {
+          valueSuffix: '%',
+        },
+      }, {
+        name: 'Symbol Coverage %',
+        type: 'line',
+        yAxis: 1,
+        tooltip: {
+          valueSuffix: '%',
+        },
+      }],
+      yAxis: [{
         title: {
-          text: 'Seconds',
+          text: 'Count / Minute',
         },
         allowDecimals: true,
         min: 0,
-      },
+      }, {
+        title: {
+          text: 'Percent',
+        },
+        min: 0,
+        max: 100,
+        opposite: true,
+      }],
       legend: {
-        enabled: false,
+        enabled: true,
       },
       credits: {
         enabled: false,
